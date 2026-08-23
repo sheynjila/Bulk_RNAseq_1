@@ -1,0 +1,111 @@
+.Rproj.user
+# ============================================================================
+# RNA-seq Project .gitignore
+# ============================================================================
+
+# Raw sequencing data
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+
+# Alignment files
+*.sam
+*.bam
+*.bai
+*.cram
+*.crai
+
+# Quantification/count outputs
+*.sf
+*.counts
+*.count
+*.tsv.tmp
+
+# Variant files (if generated)
+*.vcf
+*.vcf.gz
+*.bcf
+*.gvcf
+
+# Genome indexes
+*_index/
+star_index/
+hisat2_index/
+salmon_index/
+kallisto_index/
+bowtie2_index/
+
+# Reference genomes and annotations
+references/
+genome/
+ref/
+*.fa
+*.fasta
+*.fna
+*.gtf
+*.gff
+*.gff3
+
+# QC outputs
+fastqc/
+multiqc/
+*_fastqc.html
+*_fastqc.zip
+multiqc_report.html
+multiqc_data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Logs
+logs/
+log/
+*.log
+*.out
+*.err
+
+# Workflow managers
+.nextflow*
+work/
+.nf-test/
+.snakemake/
+dag.svg
+
+# Conda / environments
+.conda/
+conda-env/
+env/
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
+# IDEs
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+
+# Results (uncomment if results are reproducible)
+# results/
+# output/
+
+# Large files managed elsewhere (e.g., DVC)
+# data/

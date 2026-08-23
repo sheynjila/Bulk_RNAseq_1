@@ -1,0 +1,345 @@
+---
+title: "RNA-seq Count-Metadata Troubleshooting Notebook"
+author: "RNA-seq Project Runbook"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    toc: true
+    df_print: paged
+  html_notebook:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Purpose
+
+This reproducible notebook compiles the complete troubleshooting workflow for an RNA-seq count matrix (`cnt`) and sample metadata (`met`). The original validation failed because:
+
+1. The count matrix contained an unexpected column named `X`.
+2. The sample accession IDs were stored in the first metadata column, while the actual metadata row names remained `1` through `8`.
+
+The goal is to detect, explain, correct, and prevent these structural problems before creating a DESeq2 dataset.
+
+# Files and version control
+
+Small count matrices, sample sheets, and metadata files are generally useful to retain in Git because they define downstream analysis. Prefer CSV or TSV over Excel because text files are easier to review and compare. Do not commit sensitive metadata, raw FASTQ files, large BAM/CRAM files, genome indexes, or other large reproducible intermediates.
+
+A project-specific `.gitignore` can ignore large sequencing outputs while allowing files such as:
+
+- `metadata.csv`
+- `sample_sheet.tsv`
+- `gene_counts.tsv`
+- analysis scripts and configuration files
+
+# Import data safely
+
+Replace the example paths with project paths.
+
+```{r import, eval=FALSE}
+# CSV files: first column contains gene IDs or sample IDs.
+cnt <- read.csv(
+  "data/counts.csv",
+  row.names = 1,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+
+met <- read.csv(
+  "data/metadata.csv",
+  row.names = 1,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+
+# For tab-delimited files, use read.delim() instead.
+# cnt <- read.delim("data/counts.tsv", row.names = 1,
+#                   check.names = FALSE, stringsAsFactors = FALSE)
+```
+
+`row.names = 1` promotes the first field to row names. `check.names = FALSE` prevents R from unnecessarily modifying valid identifiers.
+
+# Reconstructing the original problem
+
+The initial comparison was:
+
+```{r initial-check, eval=FALSE}
+all(colnames(cnt) %in% rownames(met))
+# [1] FALSE
+```
+
+The mismatch was investigated with:
+
+```{r set-differences, eval=FALSE}
+# Samples present in counts but absent from metadata row names
+setdiff(colnames(cnt), rownames(met))
+
+# Metadata row names absent from counts
+setdiff(rownames(met), colnames(cnt))
+```
+
+Observed results showed eight SRR accessions plus `X` on the count side, while metadata row names were `"1"` through `"8"`.
+
+# Diagnose structure, not appearance
+
+A printed table may make identifiers look like row names even when they are an ordinary column. Always inspect the structure explicitly.
+
+```{r structural-diagnostics, eval=FALSE}
+dim(cnt)
+dim(met)
+str(cnt)
+str(met)
+colnames(cnt)
+rownames(cnt)[1:6]
+colnames(met)
+rownames(met)
+head(cnt)
+head(met)
+```
+
+In this case, `dim(cnt)` returned 64,102 rows and 9 columns although only eight biological samples were expected. The metadata row names returned `1` through `8`.
+
+# Correct the count matrix
+
+The unexpected `X` column was removed after confirming that `X` was not a biological sample.
+
+```{r remove-x, eval=FALSE}
+if ("X" %in% colnames(cnt)) {
+  cnt <- cnt[, colnames(cnt) != "X", drop = FALSE]
+}
+
+dim(cnt)
+# Expected for this dataset: 64102 rows and 8 sample columns
+```
+
+Do not remove a column solely because its name is unusual. First verify the expected sample list and inspect the source file.
+
+# Correct the metadata row names
+
+The sample IDs were located in the first metadata column. Promote that column to row names and then remove it from the metadata variables.
+
+```{r fix-metadata, eval=FALSE}
+# Inspect before changing anything
+head(met[, 1, drop = TRUE])
+
+# Promote the first column to row names
+rownames(met) <- trimws(as.character(met[[1]]))
+met <- met[, -1, drop = FALSE]
+
+head(rownames(met))
+```
+
+If the identifier column has a known name, prefer explicit code:
+
+```{r named-id-column, eval=FALSE}
+# Example only; replace sample_id with the actual column name.
+rownames(met) <- trimws(as.character(met$sample_id))
+met$sample_id <- NULL
+```
+
+# Normalize and compare identifiers
+
+Whitespace can create invisible mismatches.
+
+```{r normalize-identifiers, eval=FALSE}
+colnames(cnt) <- trimws(colnames(cnt))
+rownames(met) <- trimws(rownames(met))
+
+setdiff(colnames(cnt), rownames(met))
+setdiff(rownames(met), colnames(cnt))
+```
+
+Avoid automatically changing capitalization unless the naming convention is known. Sample IDs should be treated as exact identifiers.
+
+# Reorder metadata and perform the final check
+
+Membership alone is insufficient: DESeq2 requires metadata rows to be in the same order as count-matrix columns.
+
+```{r align-metadata, eval=FALSE}
+stopifnot(all(colnames(cnt) %in% rownames(met)))
+
+met <- met[colnames(cnt), , drop = FALSE]
+
+stopifnot(identical(colnames(cnt), rownames(met)))
+```
+
+# Automated validation function
+
+```{r validation-function}
+validate_rnaseq_inputs <- function(counts, metadata, expected_samples = NULL) {
+  if (!is.matrix(counts) && !is.data.frame(counts)) {
+    stop("counts must be a matrix or data frame.")
+  }
+  if (!is.data.frame(metadata)) {
+    stop("metadata must be a data frame.")
+  }
+  if (is.null(colnames(counts)) || is.null(rownames(metadata))) {
+    stop("Counts need column names and metadata needs row names.")
+  }
+
+  colnames(counts) <- trimws(colnames(counts))
+  rownames(metadata) <- trimws(rownames(metadata))
+
+  if (anyNA(colnames(counts)) || any(colnames(counts) == "")) {
+    stop("Counts contain missing or empty sample identifiers.")
+  }
+  if (anyNA(rownames(metadata)) || any(rownames(metadata) == "")) {
+    stop("Metadata contain missing or empty sample identifiers.")
+  }
+  if (anyDuplicated(colnames(counts))) {
+    stop("Duplicate sample identifiers exist in count columns.")
+  }
+  if (anyDuplicated(rownames(metadata))) {
+    stop("Duplicate sample identifiers exist in metadata row names.")
+  }
+
+  count_only <- setdiff(colnames(counts), rownames(metadata))
+  metadata_only <- setdiff(rownames(metadata), colnames(counts))
+
+  if (length(count_only) > 0 || length(metadata_only) > 0) {
+    stop(
+      paste0(
+        "Sample mismatch. Counts only: ",
+        paste(count_only, collapse = ", "),
+        "; metadata only: ",
+        paste(metadata_only, collapse = ", ")
+      )
+    )
+  }
+
+  if (!is.null(expected_samples)) {
+    expected_samples <- trimws(as.character(expected_samples))
+    if (!setequal(colnames(counts), expected_samples)) {
+      stop("Observed samples do not match expected_samples.")
+    }
+  }
+
+  metadata <- metadata[colnames(counts), , drop = FALSE]
+  stopifnot(identical(colnames(counts), rownames(metadata)))
+
+  numeric_counts <- vapply(counts, is.numeric, logical(1))
+  if (!all(numeric_counts)) {
+    stop("Every count column must be numeric.")
+  }
+  if (any(as.matrix(counts) < 0, na.rm = TRUE)) {
+    stop("Counts cannot contain negative values.")
+  }
+  if (anyNA(counts)) {
+    stop("Counts contain missing values.")
+  }
+
+  message("Validation passed: ", ncol(counts), " samples are aligned.")
+  list(counts = counts, metadata = metadata)
+}
+```
+
+Use the function as follows:
+
+```{r run-validation, eval=FALSE}
+validated <- validate_rnaseq_inputs(cnt, met)
+cnt <- validated$counts
+met <- validated$metadata
+```
+
+# Optional DESeq2 construction
+
+Run only after validation succeeds. Raw integer counts—not normalized or scaled values—should be supplied to `DESeqDataSetFromMatrix()`.
+
+```{r deseq2, eval=FALSE}
+library(DESeq2)
+
+# Replace treatment with the actual metadata variable.
+met$treatment <- factor(met$treatment)
+
+dds <- DESeqDataSetFromMatrix(
+  countData = round(as.matrix(cnt)),
+  colData = met,
+  design = ~ treatment
+)
+```
+
+Do not use `round()` to disguise non-integer normalized measurements. Confirm that the source table contains raw counts.
+
+# Prevent Excel from altering identifiers
+
+1. Keep canonical data in CSV or TSV, not XLSX.
+2. Preserve an untouched source copy.
+3. Import identifier columns into Excel explicitly as **Text** rather than opening a delimited file by double-clicking.
+4. Avoid saving count matrices from Excel.
+5. Validate identifiers before and after any spreadsheet-based edit.
+6. Store metadata and checksums in version control when appropriate.
+7. Use stable identifiers such as SRR accessions and Ensembl IDs without manual rewriting.
+
+An R round-trip check can detect unexpected changes:
+
+```{r round-trip, eval=FALSE}
+original_ids <- readLines("expected_sample_ids.txt")
+stopifnot(setequal(trimws(original_ids), rownames(met)))
+```
+
+# Data-import best practices
+
+- Maintain a data dictionary defining every metadata column.
+- Use one row per sample and one column per metadata variable.
+- Use a unique, non-empty sample ID as the metadata key.
+- Keep sample IDs identical across counts, metadata, filenames, and workflow configuration.
+- Avoid spaces and punctuation in identifiers.
+- Specify delimiter, header, encoding, quote behavior, and row-name handling explicitly.
+- Never depend only on a visual preview.
+- Record package versions with `sessionInfo()`.
+- Fail early with `stopifnot()` or a validation function.
+- Keep raw inputs read-only and write cleaned data to a separate processed directory.
+
+# Suggested project layout
+
+```text
+rnaseq-project/
+├── data/
+│   ├── raw/                 # read-only source files; often excluded from Git
+│   └── processed/           # validated counts and metadata
+├── metadata/
+│   ├── metadata.csv
+│   └── expected_sample_ids.txt
+├── R/
+│   └── validation.R
+├── notebooks/
+│   └── RNAseq_Troubleshooting_Notebook.Rmd
+├── results/
+├── .gitignore
+└── README.md
+```
+
+# Final pre-analysis checklist
+
+```{r final-checklist, eval=FALSE}
+# Dimensions and structure
+dim(cnt)
+dim(met)
+str(cnt)
+str(met)
+
+# IDs
+stopifnot(!anyDuplicated(colnames(cnt)))
+stopifnot(!anyDuplicated(rownames(met)))
+stopifnot(setequal(colnames(cnt), rownames(met)))
+
+# Order
+met <- met[colnames(cnt), , drop = FALSE]
+stopifnot(identical(colnames(cnt), rownames(met)))
+
+# Count integrity
+stopifnot(all(vapply(cnt, is.numeric, logical(1))))
+stopifnot(!anyNA(cnt))
+stopifnot(all(as.matrix(cnt) >= 0))
+
+# Reproducibility
+sessionInfo()
+```
+
+# Troubleshooting narrative
+
+The investigation began with a routine membership test that returned `FALSE`. Set-difference diagnostics showed that the count matrix contained the expected eight SRR accessions plus an unexpected `X`, while the metadata appeared to contain only numeric row names. Removing `X` corrected the count matrix from nine to eight columns, but the test still failed. The decisive check was `rownames(met)`, which proved that the visible SRR identifiers were stored in the first metadata column rather than as true row names. Promoting that column to row names, removing it from the metadata variables, and reordering metadata to match the count columns resolved the mismatch. The key lesson is that visual appearance is not enough: RNA-seq inputs should be validated structurally with `dim()`, `str()`, `rownames()`, `colnames()`, `setdiff()`, and exact-order checks before downstream analysis.
