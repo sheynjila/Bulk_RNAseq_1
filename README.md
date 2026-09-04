@@ -73,7 +73,8 @@ Differential_Gene_Expression_Study/
 └── docs/
     ├── RNAseq_DESeq2_Class_Exercise.docx/.html   # The original student lab handout this repo implements
     ├── RNAseq_Troubleshooting_Notebook.Rmd/.html/.nb.html  # Reproducible write-up of the counts/metadata debugging story
-    └── Bioconductor_Pacakage_Installation.txt    # Minimal historical install snippet
+    ├── Bioconductor_Pacakage_Installation.txt    # Minimal historical install snippet
+    └── install_rnaseq_packages.R                 # Broader reference installer — see note below
 ```
 
 **Why `02_organize_project_files.R` exists in two places:** this is deliberate, not a
@@ -199,6 +200,13 @@ not as the recommended path.
 - **`Bioconductor_Pacakage_Installation.txt`** — a minimal, three-line historical
   install snippet, kept for reference; prefer `00_manage_project_packages.R` for
   everyday use.
+- **`install_rnaseq_packages.R`** — a much broader installer covering an entire
+  R-native pipeline from raw reads to enrichment (`Rfastp`, `Rsubread`/`Rhisat2`/
+  `Rbowtie2`/`QuasR` for alignment, `tximport`/`tximeta`, full annotation packages,
+  and everything `00_manage_project_packages.R` installs). This project's own scripts
+  only need the smaller package list in [§4](#prerequisites) — this file is here as a
+  reference for anyone extending this repo to start from raw FASTQ files instead of
+  an already-quantified count matrix.
 
 ## Companion repositories
 
