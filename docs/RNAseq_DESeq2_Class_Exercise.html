@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RNA-seq DESeq2 Class Exercise</title>
+<style>
+        :root { --blue:#2E74B5; --navy:#183B56; --gold:#B07A00; --ink:#202124;
+                --muted:#5F6368; --pale:#E8EEF5; --panel:#F4F6F9; --line:#D9E0E8; }
+        * { box-sizing: border-box; }
+        body { margin:0; color:var(--ink); background:#eef2f6; font:16px/1.55 Calibri, Arial, sans-serif; }
+        main { max-width:980px; margin:32px auto; background:white; padding:64px 78px; box-shadow:0 10px 30px rgba(18,41,63,.12); }
+        .cover { padding:24px 0 30px; border-bottom:1px solid var(--line); margin-bottom:34px; }
+        .kicker { color:var(--gold); font-weight:700; letter-spacing:.12em; font-size:.8rem; }
+        h1 { color:var(--navy); font-size:2.35rem; line-height:1.1; margin:.35rem 0 .5rem; }
+        .subtitle { color:var(--muted); font-size:1.18rem; max-width:780px; }
+        h2 { color:var(--blue); font-size:1.55rem; margin:2.2rem 0 .7rem; border-top:1px solid #edf0f2; padding-top:1.2rem; }
+        h3 { color:var(--blue); font-size:1.2rem; margin:1.7rem 0 .55rem; }
+        h4 { color:#1F4D78; font-size:1.05rem; margin:1.25rem 0 .4rem; }
+        p { margin:.35rem 0 .75rem; }
+        ul, ol { margin:.35rem 0 1rem 1.4rem; padding:0; }
+        li { margin:.28rem 0; }
+        .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:24px 0; }
+        .metrics div { background:#FFF8E8; border:1px solid #ead7a2; padding:12px; text-align:center; }
+        .metrics span { display:block; color:var(--gold); font-size:.72rem; letter-spacing:.08em; font-weight:700; }
+        .metrics strong { display:block; color:var(--navy); margin-top:3px; }
+        .student-line { margin-top:24px; }
+        pre { background:var(--panel); border-left:5px solid var(--blue); padding:14px 16px; overflow:auto; font:13px/1.45 Consolas, monospace; }
+        .code-caption, .table-caption { color:var(--muted); font-size:.9rem; font-style:italic; margin-top:1rem; }
+        .note { padding:13px 16px; margin:1rem 0; border-left:5px solid var(--blue); background:var(--pale); }
+        .note.caution { border-color:var(--gold); background:#FFF8E8; }
+        .note.success { border-color:#2D6A4F; background:#EAF4EE; }
+        .note.risk { border-color:#9B1C1C; background:#FBECEC; }
+        .question { margin:1rem 0; padding:12px 15px; background:#fbfcfd; border:1px solid var(--line); }
+        .question strong { color:var(--blue); }
+        .response { height:34px; border-bottom:1px solid #aeb8c2; margin-top:8px; }
+        .table-wrap { overflow-x:auto; margin:.5rem 0 1.2rem; }
+        table { width:100%; border-collapse:collapse; font-size:.91rem; }
+        th { background:var(--pale); color:var(--navy); text-align:left; }
+        th, td { border:1px solid #cfd6dd; padding:8px 10px; vertical-align:middle; }
+        .page-break { border-top:2px dashed #d7dde3; margin:3rem 0; }
+        footer { margin-top:3rem; color:var(--muted); font-size:.85rem; }
+        @media (max-width:720px) { main { margin:0; padding:30px 20px; } .metrics { grid-template-columns:1fr 1fr; } }
+        @media print { body { background:white; } main { max-width:none; margin:0; padding:0; box-shadow:none; }
+                       .page-break { page-break-before:always; border:0; margin:0; } pre, table, aside { page-break-inside:avoid; } }
+        </style>
+</head>
+<body><main>
+<aside class="note info"><strong>Case study:</strong> You will analyze RNA-seq counts from four human cell lines. Each cell line has one untreated sample and one dexamethasone-treated sample. The statistical model estimates a common treatment effect while adjusting for baseline differences among cell lines.</aside>
+<header class="cover">
+<div class="kicker">CLASS EXERCISE</div>
+<h1>End-to-End RNA-seq Differential Expression in R</h1>
+<p class="subtitle">A guided DESeq2 analysis of dexamethasone-treated and untreated human cell lines</p>
+<div class="metrics"><div><span>FORMAT</span><strong>Hands-on lab</strong></div><div><span>LEVEL</span><strong>Beginner</strong></div><div><span>TIME</span><strong>3-4 hours</strong></div><div><span>SAMPLES</span><strong>8 total</strong></div></div>
+<p class="student-line"><strong>Student:</strong> ______________________________ &nbsp; <strong>Date:</strong> ________________</p>
+</header>
+<h2 id="how-to-use-this-exercise-1">How to use this exercise</h2>
+<p>Work from the project root - the folder containing the RStudio project file. Run the scripts in the stated order. At each checkpoint, record both the command output and a short biological or statistical interpretation.</p>
+<aside class="note caution"><strong>Do not skip the alignment step:</strong> The original CSV headers contain a trailing blank field. The alignment script reads this format deliberately so that SRR1039508 is not dropped and sample labels are not shifted.</aside>
+<h3 id="learning-objectives-2">Learning objectives</h3>
+<ul>
+<li>Create and maintain a reproducible RNA-seq project structure.</li>
+<li>Distinguish CRAN packages from Bioconductor packages and install them manually or automatically.</li>
+<li>Validate and align a gene-count matrix with sample metadata.</li>
+<li>Build a DESeq2 model that adjusts for cell line while estimating the dexamethasone treatment effect.</li>
+<li>Interpret DESeq2 result columns, multiple-testing adjusted p-values, and fold-change thresholds.</li>
+<li>Create and interpret PCA, volcano, heatmap, MA, dispersion, p-value, and gene-expression plots.</li>
+<li>Run optional log2 fold-change shrinkage, GO enrichment, GSEA, and KEGG Pathview analyses.</li>
+<li>Export results and plots with enough metadata to reproduce the analysis.</li>
+</ul>
+<div class="table-caption">Suggested session map</div>
+<div class="table-wrap"><table><thead><tr>
+<th>Stage</th>
+<th>Suggested time</th>
+<th>Primary output</th>
+</tr></thead><tbody>
+<tr><td>Project setup and packages</td><td>45 min</td><td>Organized folders and package-status report</td></tr>
+<tr><td>Data validation and alignment</td><td>30 min</td><td>Aligned count and metadata CSV files</td></tr>
+<tr><td>DESeq2 model and results</td><td>45 min</td><td>Treatment contrast and DEG summary</td></tr>
+<tr><td>Core and QC plots</td><td>60 min</td><td>PCA, volcano, boxplot, heatmaps, MA and diagnostics</td></tr>
+<tr><td>Optional interpretation</td><td>30-45 min</td><td>Shrinkage, GO/GSEA or KEGG output</td></tr>
+<tr><td>Submission</td><td>15 min</td><td>Results table, figures and interpretation</td></tr>
+</tbody></table></div>
+<h3 id="files-used-in-the-class-3">Files used in the class</h3>
+<ul>
+<li>counts.csv - raw gene counts; rows are Ensembl genes and columns are samples.</li>
+<li>metadata2.csv - sample IDs, cell-line labels and dexamethasone conditions.</li>
+<li>00_install_and_load_packages.R - explicit manual and automated package examples.</li>
+<li>00_manage_project_packages.R - package inventory, status and installation modes.</li>
+<li>01_create_project_directories.R and 02_organize_project_files.R - project organization.</li>
+<li>Aligning_meta_counts.R - repairs the supplied header layout and aligns samples.</li>
+<li>LOAD_CLEANED_ALIGNED_DATA.R - constructs and fits the DESeq2 model.</li>
+<li>VISUALIZE_DESeq2_RESULTS.R - PCA, volcano and top-gene boxplot.</li>
+<li>Additional_high-value_visualization_plots_commonly_used_in_RNA-seq_analyses.R - QC, profiles and optional enrichment.</li>
+</ul>
+<div class="page-break"></div>
+<h2 id="exercise-1-create-the-project-structure-4">Exercise 1 - Create the project structure</h2>
+<p>Goal: Create separate folders for code, data and figures before analysis begins.</p>
+<ol>
+<li>Open Differential_Gene_Expression_udy.Rproj in RStudio.</li>
+<li>Confirm that the Console working directory is the project root.</li>
+<li>Run the directory-creation script and inspect the result.</li>
+</ol>
+<div class="code-caption">Run from the project root</div>
+<pre><code>getwd()
+source(&quot;01_create_project_directories.R&quot;)
+list.dirs(path = &quot;.&quot;, recursive = FALSE)</code></pre>
+<aside class="note success"><strong>Expected structure:</strong> The root should now contain scripts, data and plots directories. Re-running the script is safe because existing directories are reported rather than recreated.</aside>
+<div class="question"><strong>Checkpoint question:</strong> Why is it useful to separate raw data, analysis scripts and generated figures?<div class="response"></div></div>
+<h2 id="exercise-2-organize-project-files-safely-5">Exercise 2 - Organize project files safely</h2>
+<p>Goal: Move top-level R files, CSV files and common plot formats into their appropriate directories without overwriting existing files.</p>
+<div class="code-caption">Organize and verify</div>
+<pre><code>source(&quot;02_organize_project_files.R&quot;)
+list.files(&quot;scripts&quot;)
+list.files(&quot;data&quot;)
+list.files(&quot;plots&quot;)</code></pre>
+<ul>
+<li>R files move to scripts; the running organizer remains in the root and is also copied to scripts.</li>
+<li>CSV files move to data.</li>
+<li>PNG, JPG, JPEG, PDF, SVG, TIF, TIFF and BMP files move to plots.</li>
+<li>A file is skipped when a same-named destination already exists.</li>
+</ul>
+<div class="question"><strong>Checkpoint question:</strong> Why is skip-on-conflict safer than automatically overwriting the destination file?<div class="response"></div></div>
+<h2 id="exercise-3-manage-install-and-load-packages-6">Exercise 3 - Manage, install and load packages</h2>
+<p>Goal: Recognize package sources and compare explicit manual installation with automated installation of missing packages.</p>
+<div class="table-caption">Packages represented in the current scripts</div>
+<div class="table-wrap"><table><thead><tr>
+<th>Packages</th>
+<th>Source</th>
+<th>Role</th>
+</tr></thead><tbody>
+<tr><td>ggplot2, dplyr, tidyr</td><td>CRAN</td><td>Plotting, data manipulation and reshaping</td></tr>
+<tr><td>pheatmap, RColorBrewer</td><td>CRAN</td><td>Heatmaps and color palettes</td></tr>
+<tr><td>DESeq2</td><td>Bioconductor</td><td>Differential-expression model</td></tr>
+<tr><td>apeglm</td><td>Bioconductor</td><td>Log2 fold-change shrinkage</td></tr>
+<tr><td>clusterProfiler, enrichplot</td><td>Bioconductor</td><td>GO enrichment, GSEA and plots</td></tr>
+<tr><td>org.Hs.eg.db</td><td>Bioconductor</td><td>Human gene identifier annotations</td></tr>
+<tr><td>pathview</td><td>Bioconductor</td><td>KEGG pathway diagrams</td></tr>
+</tbody></table></div>
+<h3 id="3a-inspect-package-status-7">3A. Inspect package status</h3>
+<div class="code-caption">List packages without installing</div>
+<pre><code>source(&quot;scripts/00_manage_project_packages.R&quot;)
+manage_packages(&quot;list&quot;)</code></pre>
+<h3 id="3b-manual-method-8">3B. Manual method</h3>
+<p>Source the teaching script, inspect the explicit install.packages(), BiocManager::install() and library() commands, then run the manual functions only if your instructor assigns this method.</p>
+<div class="code-caption">Manual installation and loading</div>
+<pre><code>source(&quot;scripts/00_install_and_load_packages.R&quot;)
+install_packages_manually()
+load_packages_manually()</code></pre>
+<h3 id="3c-automated-method-9">3C. Automated method</h3>
+<p>The automated installer tests each package with requireNamespace() and installs only those that are missing.</p>
+<div class="code-caption">Automated installation and loading</div>
+<pre><code>source(&quot;scripts/00_install_and_load_packages.R&quot;)
+install_packages_automatically()
+load_packages_automatically()</code></pre>
+<aside class="note caution"><strong>Installation time:</strong> Bioconductor packages can take several minutes and may require internet access. Do not interrupt a package while it is compiling or downloading dependencies.</aside>
+<div class="question"><strong>Checkpoint question:</strong> What is the practical difference between install.packages() and BiocManager::install() in this workflow?<div class="response"></div></div>
+<div class="question"><strong>Checkpoint question:</strong> Why does the automated approach test for missing packages before installation?<div class="response"></div></div>
+<h2 id="exercise-4-inspect-and-align-counts-with-metadata-10">Exercise 4 - Inspect and align counts with metadata</h2>
+<p>Goal: Ensure every count column is paired with the correct metadata row and retain all eight samples.</p>
+<h3 id="4a-inspect-the-first-lines-11">4A. Inspect the first lines</h3>
+<div class="code-caption">Look at the supplied header structure</div>
+<pre><code>readLines(&quot;data/counts.csv&quot;, n = 3)
+readLines(&quot;data/metadata2.csv&quot;, n = 5)</code></pre>
+<p>The supplied files store a blank identifier-column header as a trailing comma. A conventional read.csv(..., row.names = 1) call would misassign sample names. The alignment script reads the first count line separately, removes the blank name, and then assigns the eight sample IDs to the eight count columns.</p>
+<h3 id="4b-run-the-alignment-script-12">4B. Run the alignment script</h3>
+<div class="code-caption">Create aligned files</div>
+<pre><code>source(&quot;scripts/Aligning_meta_counts.R&quot;)
+list.files(&quot;data&quot;, pattern = &quot;aligned[.]csv$&quot;)</code></pre>
+<aside class="note success"><strong>Expected checkpoint:</strong> The Console should report 8 aligned samples and 64,102 genes. The files counts_aligned.csv and metadata_aligned.csv should appear in data.</aside>
+<h3 id="4c-verify-the-output-independently-13">4C. Verify the output independently</h3>
+<div class="code-caption">Alignment checks</div>
+<pre><code>cnt_check &lt;- read.csv(&quot;data/counts_aligned.csv&quot;, row.names = 1, check.names = FALSE)
+met_check &lt;- read.csv(&quot;data/metadata_aligned.csv&quot;, row.names = 1, check.names = FALSE)
+
+dim(cnt_check)
+identical(colnames(cnt_check), rownames(met_check))
+colnames(met_check)
+head(cnt_check[, 1:4])
+met_check</code></pre>
+<div class="question"><strong>Checkpoint question:</strong> What would be the statistical consequence of assigning one sample&#x27;s count column to another sample&#x27;s treatment label?<div class="response"></div></div>
+<div class="question"><strong>Checkpoint question:</strong> Write the expected result of identical(colnames(cnt_check), rownames(met_check)).<div class="response"></div></div>
+<h2 id="exercise-5-build-and-run-the-deseq2-model-14">Exercise 5 - Build and run the DESeq2 model</h2>
+<p>Goal: Fit a treatment comparison that adjusts for differences among cell lines.</p>
+<div class="code-caption">Run the model and inspect results</div>
+<pre><code>source(&quot;scripts/LOAD_CLEANED_ALIGNED_DATA.R&quot;)
+
+design(dds)
+resultsNames(dds)
+summary(res)
+head(res[order(res$padj), ])</code></pre>
+<h3 id="understand-the-design-15">Understand the design</h3>
+<div class="code-caption">Model terms used in the script</div>
+<pre><code>design = ~ cellline + dexamethasone
+contrast = c(&quot;dexamethasone&quot;, &quot;treated&quot;, &quot;untreated&quot;)</code></pre>
+<p>The cellline term accounts for baseline expression differences among cell lines. The dexamethasone coefficient estimates the treated-versus-untreated effect after that adjustment. Untreated is explicitly set as the reference level.</p>
+<ul>
+<li>Counts must be numeric, non-negative whole numbers with no missing values.</li>
+<li>Metadata rows must exactly match count columns.</li>
+<li>Genes with fewer than 10 total reads across all samples are removed before model fitting.</li>
+<li>The DESeq2 results use alpha = 0.05 for adjusted-p-value summaries.</li>
+</ul>
+<div class="question"><strong>Checkpoint question:</strong> Why is cellline included in the design instead of using only ~ dexamethasone?<div class="response"></div></div>
+<div class="question"><strong>Checkpoint question:</strong> What does a positive log2FoldChange mean for the treated-versus-untreated contrast?<div class="response"></div></div>
+<h3 id="interpret-the-result-columns-16">Interpret the result columns</h3>
+<div class="table-caption">DESeq2 results object</div>
+<div class="table-wrap"><table><thead><tr>
+<th>Column</th>
+<th>Meaning</th>
+<th>Interpretation prompt</th>
+</tr></thead><tbody>
+<tr><td>baseMean</td><td>Mean normalized expression</td><td>Is the gene lowly or highly expressed overall?</td></tr>
+<tr><td>log2FoldChange</td><td>Estimated treated/untreated effect</td><td>Positive is higher in treated; negative is lower.</td></tr>
+<tr><td>lfcSE</td><td>Standard error of the fold change</td><td>How uncertain is the effect estimate?</td></tr>
+<tr><td>stat</td><td>Wald test statistic</td><td>How large is the effect relative to its uncertainty?</td></tr>
+<tr><td>pvalue</td><td>Raw hypothesis-test p-value</td><td>Evidence before correcting for many genes.</td></tr>
+<tr><td>padj</td><td>Benjamini-Hochberg adjusted p-value</td><td>Use this for the primary significance decision.</td></tr>
+</tbody></table></div>
+<h2 id="exercise-6-summarize-and-export-differential-expression-17">Exercise 6 - Summarize and export differential expression</h2>
+<p>Goal: Count significant genes, separate directions and export a clearly named result table.</p>
+<div class="code-caption">Create a DEG summary and export</div>
+<pre><code>res_df &lt;- as.data.frame(res)
+res_df$gene &lt;- rownames(res_df)
+
+padj_cutoff &lt;- 0.05
+lfc_cutoff &lt;- 1
+
+significant &lt;- subset(res_df, !is.na(padj) &amp; padj &lt; padj_cutoff)
+up_genes &lt;- subset(significant, log2FoldChange &gt; lfc_cutoff)
+down_genes &lt;- subset(significant, log2FoldChange &lt; -lfc_cutoff)
+
+c(total_tested = nrow(res_df),
+  significant = nrow(significant),
+  up = nrow(up_genes),
+  down = nrow(down_genes))
+
+write.csv(
+  res_df[order(res_df$padj), ],
+  &quot;data/DESeq2_dexamethasone_vs_untreated.csv&quot;,
+  row.names = FALSE
+)</code></pre>
+<aside class="note info"><strong>Threshold logic:</strong> padj &lt; 0.05 controls the multiple-testing decision. The additional absolute log2 fold-change threshold of 1 identifies changes greater than two-fold in either direction.</aside>
+<div class="question"><strong>Checkpoint question:</strong> How many genes meet padj &lt; 0.05? Of those, how many also meet |log2FoldChange| &gt; 1?<div class="response"></div></div>
+<div class="question"><strong>Checkpoint question:</strong> Why should a raw p-value threshold not be used alone when thousands of genes are tested?<div class="response"></div></div>
+<h2 id="exercise-7-create-and-interpret-the-main-figures-18">Exercise 7 - Create and interpret the main figures</h2>
+<p>Goal: Use sample-level and gene-level visualizations to evaluate the experiment and summarize the treatment effect.</p>
+<div class="code-caption">Generate PCA, volcano and top-gene plots</div>
+<pre><code>source(&quot;scripts/VISUALIZE_DESeq2_RESULTS.R&quot;)</code></pre>
+<h3 id="7a-pca-plot-19">7A. PCA plot</h3>
+<ul>
+<li>Each point is a sample represented by variance-stabilized expression values.</li>
+<li>Color represents dexamethasone treatment and shape represents cell line.</li>
+<li>Inspect whether paired samples are plausible and whether one sample is an obvious outlier.</li>
+<li>PC axis labels report the percentage of variance explained.</li>
+</ul>
+<div class="question"><strong>Checkpoint question:</strong> Does separation appear stronger by cell line, treatment, or neither? Support your answer using the plot.<div class="response"></div></div>
+<h3 id="7b-volcano-plot-20">7B. Volcano plot</h3>
+<ul>
+<li>The x-axis is log2 fold change; the y-axis is -log10 adjusted p-value.</li>
+<li>Red points pass padj &lt; 0.05 and log2FoldChange &gt; 1.</li>
+<li>Blue points pass padj &lt; 0.05 and log2FoldChange &lt; -1.</li>
+<li>Gray points do not pass both statistical and effect-size thresholds.</li>
+</ul>
+<div class="question"><strong>Checkpoint question:</strong> Choose one up-regulated and one down-regulated gene. Record each gene ID, fold change and adjusted p-value.<div class="response"></div></div>
+<h3 id="7c-top-gene-boxplot-21">7C. Top-gene boxplot</h3>
+<p>The script selects the gene with the smallest non-missing adjusted p-value, retrieves normalized counts and plots count + 1 on a log10 scale. Jittered points preserve the individual samples and their cell-line identities.</p>
+<div class="question"><strong>Checkpoint question:</strong> Is the top gene&#x27;s treatment effect consistent across all four cell lines? Describe any heterogeneity.<div class="response"></div></div>
+<h3 id="save-ggplot-figures-22">Save ggplot figures</h3>
+<div class="code-caption">Export the main ggplot objects</div>
+<pre><code>ggsave(&quot;plots/PCA_sample_clustering.png&quot;, pca_plot, width = 7, height = 5, dpi = 300)
+ggsave(&quot;plots/Volcano_dexamethasone_vs_untreated.png&quot;, volcano_plot, width = 7, height = 5, dpi = 300)
+
+if (exists(&quot;top_gene_plot&quot;)) {
+  ggsave(&quot;plots/Top_gene_expression.png&quot;, top_gene_plot, width = 7, height = 5, dpi = 300)
+}</code></pre>
+<h2 id="exercise-8-run-additional-qc-and-expression-plots-23">Exercise 8 - Run additional QC and expression plots</h2>
+<p>Goal: Evaluate sample distances, high-ranking gene patterns, mean-dependent effects and DESeq2 model diagnostics.</p>
+<div class="code-caption">Run the default additional plots</div>
+<pre><code>source(&quot;scripts/Additional_high-value_visualization_plots_commonly_used_in_RNA-seq_analyses.R&quot;)</code></pre>
+<div class="table-caption">Interpretation guide for the additional figures</div>
+<div class="table-wrap"><table><thead><tr>
+<th>Plot</th>
+<th>Question it answers</th>
+<th>Warning sign</th>
+</tr></thead><tbody>
+<tr><td>Sample-distance heatmap</td><td>Which samples have similar global expression?</td><td>A sample is distant from every biologically related sample.</td></tr>
+<tr><td>Top-gene Z-score heatmap</td><td>Do significant genes show coherent relative patterns?</td><td>Patterns are driven by one isolated sample.</td></tr>
+<tr><td>MA plot</td><td>Does fold change depend on average expression?</td><td>Extreme effects are concentrated only at very low counts.</td></tr>
+<tr><td>Raw p-value histogram</td><td>Is there evidence of a signal beyond a null-like background?</td><td>Unexpected spikes away from zero or strong irregularity.</td></tr>
+<tr><td>Dispersion plot</td><td>Does the fitted variance trend follow gene estimates?</td><td>The trend poorly represents the center of estimates.</td></tr>
+<tr><td>Expression profiles</td><td>Are top-gene changes consistent across cell lines?</td><td>Opposite directions dominate different cell lines.</td></tr>
+</tbody></table></div>
+<div class="question"><strong>Checkpoint question:</strong> Do the PCA and sample-distance heatmap tell a consistent story about sample similarity?<div class="response"></div></div>
+<div class="question"><strong>Checkpoint question:</strong> Why are gene heatmap rows converted to Z-scores instead of plotting raw counts directly?<div class="response"></div></div>
+<div class="question"><strong>Checkpoint question:</strong> What information does the dispersion plot provide that the volcano plot does not?<div class="response"></div></div>
+<h2 id="exercise-9-optional-advanced-analyses-24">Exercise 9 - Optional advanced analyses</h2>
+<aside class="note caution"><strong>Run one extension at a time:</strong> Set one switch to TRUE, source the additional script, inspect the output, then return the switch to FALSE before testing another extension.</aside>
+<h3 id="9a-log2-fold-change-shrinkage-25">9A. Log2 fold-change shrinkage</h3>
+<div class="code-caption">Switch in the additional visualization script</div>
+<pre><code>run_lfc_shrinkage &lt;- TRUE</code></pre>
+<p>apeglm shrinkage moderates unstable fold-change estimates, especially for genes with low information, without redefining the original p-values. Compare the unshrunken and shrunken MA plots.</p>
+<div class="question"><strong>Checkpoint question:</strong> Which genes change most after shrinkage: high-count or low-count genes? What does that imply about uncertainty?<div class="response"></div></div>
+<h3 id="9b-go-enrichment-and-gsea-26">9B. GO enrichment and GSEA</h3>
+<div class="code-caption">Switch in the additional visualization script</div>
+<pre><code>run_enrichment &lt;- TRUE</code></pre>
+<ul>
+<li>GO over-representation uses Ensembl IDs from genes passing padj &lt; 0.05.</li>
+<li>The analysis targets Biological Process terms and uses Benjamini-Hochberg correction.</li>
+<li>GSEA ranks all genes by the DESeq2 Wald statistic and can detect coordinated pathway shifts without a hard DEG cutoff.</li>
+<li>org.Hs.eg.db supplies human identifier annotations.</li>
+</ul>
+<div class="question"><strong>Checkpoint question:</strong> How does the input to over-representation analysis differ from the input to GSEA?<div class="response"></div></div>
+<div class="question"><strong>Checkpoint question:</strong> Report one enriched biological process and explain why it may be relevant to the treatment response. Treat this as a hypothesis, not proof of mechanism.<div class="response"></div></div>
+<h3 id="9c-kegg-pathview-27">9C. KEGG Pathview</h3>
+<div class="code-caption">Switch and pathway ID</div>
+<pre><code>run_pathview &lt;- TRUE
+pathway_id &lt;- &quot;hsa04110&quot;  # Cell cycle example</code></pre>
+<p>The script converts Ensembl IDs to Entrez IDs, averages duplicate mappings and overlays fold changes on a human KEGG pathway. Pathview writes its output to plots.</p>
+<aside class="note caution"><strong>Network dependency:</strong> Pathview normally retrieves pathway files from KEGG. This extension can fail when the internet is unavailable or the selected pathway ID is invalid.</aside>
+<div class="question"><strong>Checkpoint question:</strong> Why must Ensembl IDs be mapped to Entrez IDs before creating the KEGG overlay?<div class="response"></div></div>
+<aside class="note info"><strong>Why there is no UpSet plot:</strong> This project contains one treatment contrast. UpSet plots become useful only when comparing overlapping DEG sets from two or more contrasts.</aside>
+<h2 id="exercise-10-reproducibility-and-final-export-28">Exercise 10 - Reproducibility and final export</h2>
+<p>Goal: Save enough information for another student to understand what was run and to reproduce the result.</p>
+<div class="code-caption">Record software and analysis parameters</div>
+<pre><code>capture.output(sessionInfo(), file = &quot;data/sessionInfo.txt&quot;)
+
+writeLines(
+  c(
+    &quot;Design: ~ cellline + dexamethasone&quot;,
+    &quot;Contrast: treated vs untreated&quot;,
+    &quot;Adjusted p-value cutoff: 0.05&quot;,
+    &quot;Absolute log2 fold-change cutoff for volcano categories: 1&quot;,
+    paste(&quot;Analysis date:&quot;, Sys.Date())
+  ),
+  &quot;data/analysis_parameters.txt&quot;
+)
+
+list.files(&quot;data&quot;)
+list.files(&quot;plots&quot;)</code></pre>
+<ul>
+<li>Do not edit raw counts.csv or metadata2.csv after organization.</li>
+<li>Keep generated aligned files and result tables in data with descriptive names.</li>
+<li>Keep plot filenames tied to the contrast and plot type.</li>
+<li>Record package versions with sessionInfo().</li>
+<li>State all thresholds and the model design in the final report.</li>
+</ul>
+<div class="question"><strong>Checkpoint question:</strong> What information in sessionInfo() would help explain why results differ between two computers?<div class="response"></div></div>
+<h2 id="final-class-submission-29">Final class submission</h2>
+<p>Submit the following as one organized project folder plus a short interpretation document.</p>
+<ul>
+<li>A scripts directory containing the analysis and package-management R files.</li>
+<li>A data directory containing raw inputs, aligned inputs, the DESeq2 result CSV, sessionInfo.txt and analysis_parameters.txt.</li>
+<li>A plots directory containing at least PCA, volcano, top-gene, sample-distance, top-gene heatmap and MA figures.</li>
+<li>A one-page interpretation that states the model, contrast, thresholds, DEG totals, QC conclusions and two biological hypotheses.</li>
+<li>One optional advanced output: shrunken MA comparison, GO/GSEA result or KEGG pathway overlay.</li>
+</ul>
+<div class="table-caption">Suggested 100-point rubric</div>
+<div class="table-wrap"><table><thead><tr>
+<th>Assessment area</th>
+<th>Points</th>
+<th>Evidence</th>
+</tr></thead><tbody>
+<tr><td>Project organization</td><td>10</td><td>Correct folders and safe file placement</td></tr>
+<tr><td>Package workflow</td><td>10</td><td>Package status plus manual or automated method</td></tr>
+<tr><td>Data alignment</td><td>15</td><td>Eight samples, 64,102 genes and exact ID/order match</td></tr>
+<tr><td>DESeq2 model</td><td>20</td><td>Correct factors, reference, design, filtering and contrast</td></tr>
+<tr><td>Core figures</td><td>20</td><td>Readable plots with accurate interpretation</td></tr>
+<tr><td>Additional QC</td><td>10</td><td>Heatmaps, MA, p-values or dispersion discussed</td></tr>
+<tr><td>Reproducibility</td><td>10</td><td>Results, parameters and session information exported</td></tr>
+<tr><td>Scientific reasoning</td><td>5</td><td>Claims distinguish evidence from hypothesis</td></tr>
+</tbody></table></div>
+<h2 id="troubleshooting-guide-30">Troubleshooting guide</h2>
+<div class="table-caption">Common errors and responses</div>
+<div class="table-wrap"><table><thead><tr>
+<th>Problem</th>
+<th>Likely cause</th>
+<th>Action</th>
+</tr></thead><tbody>
+<tr><td>File not found</td><td>R is not running from the project root</td><td>Open the .Rproj file and confirm getwd().</td></tr>
+<tr><td>Package not installed</td><td>Installation step was skipped or failed</td><td>Run manage_packages(&#x27;list&#x27;), then the selected installer.</td></tr>
+<tr><td>counts.csv missing</td><td>Files were organized but an old root-relative command was used</td><td>Use data/counts.csv or run the supplied scripts from root.</td></tr>
+<tr><td>Sample names do not match</td><td>Metadata and count columns are not aligned</td><td>Rerun Aligning_meta_counts.R; do not reorder by hand.</td></tr>
+<tr><td>dds or res not found</td><td>Visualization was run before model fitting</td><td>Run LOAD_CLEANED_ALIGNED_DATA.R first.</td></tr>
+<tr><td>No top-gene plot</td><td>No gene passed padj &lt; 0.05</td><td>Report the result; do not relax thresholds silently.</td></tr>
+<tr><td>GO/GSEA returns no terms</td><td>No enrichment passed the cutoff or IDs did not map</td><td>Inspect mapped IDs and report the null result.</td></tr>
+<tr><td>Pathview fails</td><td>Network or pathway-ID issue</td><td>Check internet access and the human hsa pathway ID.</td></tr>
+</tbody></table></div>
+<h2 id="instructor-and-self-check-checkpoints-31">Instructor and self-check checkpoints</h2>
+<ul>
+<li>The raw alignment stage should retain 64,102 genes and all 8 sample IDs.</li>
+<li>The metadata should contain exactly cellline and dexamethasone columns after alignment.</li>
+<li>There should be four cell lines, each represented by one untreated and one treated sample.</li>
+<li>The DESeq2 design should be ~ cellline + dexamethasone, with untreated as the treatment reference.</li>
+<li>The primary contrast should be dexamethasone treated versus untreated.</li>
+<li>The number of genes retained after the total-count &gt;= 10 filter must be recorded from the student&#x27;s run rather than assumed.</li>
+<li>Biological conclusions must be based on the generated results; the exercise intentionally does not pre-supply expected DEG or pathway answers.</li>
+</ul>
+<aside class="note success"><strong>Completion standard:</strong> A technically successful analysis is not only one that runs. It must preserve sample identity, use an appropriate model, document thresholds, pass basic QC review and communicate uncertainty honestly.</aside>
+<footer>Class exercise based on the supplied RNA-seq project scripts.</footer>
+</main></body></html>

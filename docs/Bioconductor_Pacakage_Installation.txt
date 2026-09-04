@@ -2,7 +2,7 @@ if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install()
 
-BiocManager::install(c("GenomicFeatures")
+BiocManager::install(c("GenomicFeatures"))
 
-#Installation of DESeq2                     
+#Installation of DESeq2
 BiocManager::install("DESeq2")
